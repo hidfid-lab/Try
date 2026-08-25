@@ -77,7 +77,7 @@
         if (store === '711') {
             if (cardType === 'product') {
                 targetFormat = "CODE_128";
-                desc = "7-ELEVEN 商品卡 (支援 Code 128 雙條碼)";
+                desc = "7-ELEVEN 商品卡 (支援 Code 128)";
             } else {
                 targetFormat = "CODE_128";
                 desc = "7-ELEVEN 咖啡卡 (City Café)";
@@ -99,7 +99,6 @@
         if (isScanning) return;
         
         const store = document.getElementById('storeSelect').value;
-        const cardType = document.getElementById('cardTypeSelect').value;
         
         // 依照作者邏輯：7-11 預設 Code 128，全家預設 Code 39
         const selectedFormats = (store === '711') ? 
@@ -111,23 +110,18 @@
         const qrConfig = { 
             fps: 10, 
             qrbox: { width: 280, height: 120 },
-            // 關鍵設定：明確指定格式，過濾掉 QR Code 以省時
             formatsToSupport: selectedFormats
         };
 
         html5QrCode.start(
             { facingMode: "environment" }, 
-            qrconfig, 
+            qrConfig, 
             (decodedText, decodedResult) => {
-                // 成功抓取條碼回呼
                 document.getElementById('resultArea').innerHTML = `
                     <strong>🎉 成功擷取！</strong><br>
                     格式：${decodedResult.result.format.formatName}<br>
                     內容：<code>${decodedText}</code>
                 `;
-                
-                // 模擬 Cooldown 暫停機制，避免連續重複觸發
-                // 可在此處加入音效 (如「超商雙嗶」)
             },
             (errorMessage) => {
                 // 掃描中未對準的背景錯誤可忽略
@@ -153,8 +147,7 @@
     }
 
     // 初始化載入規格提示
-    updateLargerConfig();
-    function updateLargerConfig() { updateBarcodeConfig(); }
+    updateBarcodeConfig();
 </script>
 
 </body>
