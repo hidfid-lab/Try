@@ -3,151 +3,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OmniPass 仿製版 - 超商條碼連續掃描器</title>
-    <!-- 引入 html5-qrcode 函式庫 -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <title>卡匣 CardBox：個人條碼收納工具</title>
+    <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@latest/dist/index.js"></script>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f4f6f9; margin: 0; padding: 16px; color: #333; }
-        .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        h2 { font-size: 1.25rem; margin-top: 0; color: #1a73e8; }
-        .form-group { margin-bottom: 14px; }
-        label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 0.9rem; }
-        select, button { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 1rem; background: #fff; }
-        button.primary { background: #10b981; color: white; border: none; font-weight: bold; cursor: pointer; margin-top: 10px; }
-        button.primary:hover { background: #059669; }
-        #reader { width: 100%; border-radius: 8px; overflow: hidden; margin-top: 10px; background: #000; }
-        .result-box { margin-top: 15px; padding: 12px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; font-size: 0.95rem; word-break: break-all; }
-        .settings-panel { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 14px; font-size: 0.85rem; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #1a1625; margin: 0; padding: 12px; color: #f3f0fa; }
+        .container { max-width: 480px; margin: 0 auto; background: #2a2438; padding: 16px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.35); }
+        h2 { font-size: 1.15rem; margin-top: 0; color: #c084fc; text-align: center; letter-spacing: 1px; }
+        .subtitle { text-align: center; font-size: 0.75rem; color: #a78bda; margin-top: -8px; margin-bottom: 12px; }
+        .section-title { font-size: 0.85rem; color: #a78bda; margin: 14px 0 6px 0; font-weight: bold; }
+        .btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+        .option-btn { flex: 1; min-width: 70px; padding: 9px 10px; background: #3a3250; border: 1px solid #4c4166; color: #d8d2ea; border-radius: 10px; font-size: 0.85rem; cursor: pointer; text-align: center; transition: all 0.2s; }
+        .option-btn.active { background: #9333ea; color: white; border-color: #a855f7; font-weight: bold; }
+        .action-btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 1rem; margin-top: 18px; background: #14b8a6; color: white; }
+        .action-btn.stop { background: #ef4444; }
+        .status-bar { margin-top: 12px; padding: 10px; background: #1a1625; border-radius: 8px; font-size: 0.8rem; color: #c084fc; border: 1px solid #4c4166; }
+
+        .video-container { position: relative; width: 100%; border-radius: 14px; overflow: hidden; margin-top: 12px; background: #000; display: none; border: 2px solid #4c4166; }
+        video { width: 100%; display: block; object-fit: cover; max-height: 300px; }
+        .roi-box {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80%; height: 120px;
+            border: 2px dashed #14b8a6;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            border-radius: 8px;
+        }
+        .result-box { margin-top: 10px; padding: 10px; background: #1a1625; border-radius: 8px; font-size: 0.85rem; word-break: break-all; border: 1px solid #4c4166; }
+        .card-list { margin-top: 16px; }
+        .card-item { display: flex; justify-content: space-between; align-items: center; background: #1a1625; border: 1px solid #4c4166; border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 0.85rem; }
+        .card-item .meta { color: #a78bda; font-size: 0.75rem; }
+        .card-item .del { color: #ef4444; cursor: pointer; font-size: 0.8rem; padding: 4px 8px; }
+        .empty-hint { color: #6b5f8a; font-size: 0.8rem; text-align: center; padding: 10px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>🚀 仿 OmniPass 條碼連續掃描</h2>
+    <h2>卡匣 CardBox</h2>
+    <div class="subtitle">個人條碼收納工具・僅存於此裝置</div>
 
-    <!-- 步驟一：選擇超商 -->
-    <div class="form-group">
-        <label>① 選擇超商</label>
-        <select id="storeSelect" onchange="updateBarcodeConfig()">
-            <option value="711">7-ELEVEN</option>
-            <option value="familymart">全家便利商店</option>
-        </select>
+    <!-- ① 選擇通路 -->
+    <div class="section-title">① 通路（決定預設條碼格式）</div>
+    <div class="btn-group">
+        <div class="option-btn active" onclick="setStore('通路A', this)">通路 A</div>
+        <div class="option-btn" onclick="setStore('通路B', this)">通路 B</div>
     </div>
 
-    <!-- 步驟二：選擇卡片種類 -->
-    <div class="form-group">
-        <label>② 選擇卡片種類</label>
-        <select id="cardTypeSelect" onchange="updateBarcodeConfig()">
-            <option value="product">商品卡</option>
-            <option value="coffee">咖啡卡</option>
-        </select>
+    <!-- ② 卡片種類 -->
+    <div class="section-title">② 卡片種類</div>
+    <div class="btn-group">
+        <div class="option-btn active" onclick="setCardType('商品卡', this)">商品卡</div>
+        <div class="option-btn" onclick="setCardType('飲品卡', this)">飲品卡</div>
     </div>
 
-    <!-- 參數與規格顯示面板 -->
-    <div class="settings-panel" id="configDisplay">
-        目前鎖定格式：Code 128 (7-ELEVEN 商品卡預設) | 排除 QR Code：已啟用
+    <!-- ③ 掃描模式 -->
+    <div class="section-title">③ 掃描模式</div>
+    <div class="btn-group">
+        <div class="option-btn active" onclick="setScanMode('雙條碼', this)">上下雙條碼</div>
+        <div class="option-btn" onclick="setScanMode('單條碼', this)">單一條碼</div>
     </div>
 
-    <!-- 掃描預覽區 -->
-    <div id="reader"></div>
+    <div class="status-bar" id="statusBar">
+        目前設定：通路A · 商品卡 · 雙條碼 · CODE128
+    </div>
 
-    <!-- 控制按鈕 -->
-    <button class="primary" id="startBtn" onclick="startScanning()">▶ 啟動視訊連續掃描</button>
-    <button style="background:#ef4444; color:white; border:none; margin-top:8px; display:none;" id="stopBtn" onclick="stopScanning()">⏹ 停止掃描</button>
+    <button class="action-btn" id="mainBtn" onclick="toggleScanner()">▶ 啟動掃描</button>
 
-    <!-- 結果輸出 -->
+    <div class="video-container" id="videoContainer">
+        <video id="video" muted playsinline autoplay></video>
+        <div class="roi-box"></div>
+    </div>
+
     <div class="result-box" id="resultArea">
-        <strong>掃描結果：</strong> 尚未讀取條碼
+        <strong>掃描結果：</strong> 尚未讀取
+    </div>
+
+    <div class="section-title">已收錄卡片</div>
+    <div class="card-list" id="cardList">
+        <div class="empty-hint">尚未收錄任何卡片</div>
     </div>
 </div>
 
 <script>
-    let html5QrCode;
+    let state = {
+        store: '通路A',
+        cardType: '商品卡',
+        scanMode: '雙條碼',
+        barcodeFormat: 'CODE128'
+    };
+
+    let mediaStream = null;
+    let scanInterval = null;
     let isScanning = false;
+    let isProcessing = false;
 
-    // 根據超商與種類動態調整鎖定的條碼格式 (Code 128 或 Code 39)
-    function updateBarcodeConfig() {
-        const store = document.getElementById('storeSelect').value;
-        const cardType = document.getElementById('cardTypeSelect').value;
-        const configDisplay = document.getElementById('configDisplay');
+    // 卡片以 localStorage 儲存在本機瀏覽器,僅供你自己使用
+    const STORAGE_KEY = 'cardbox_cards_v1';
 
-        let targetFormat = "CODE_128";
-        let desc = "7-ELEVEN 預設使用";
+    function loadCards() {
+        try {
+            return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        } catch (e) { return []; }
+    }
 
-        if (store === '711') {
-            if (cardType === 'product') {
-                targetFormat = "CODE_128";
-                desc = "7-ELEVEN 商品卡 (支援 Code 128)";
-            } else {
-                targetFormat = "CODE_128";
-                desc = "7-ELEVEN 咖啡卡 (City Café)";
-            }
-        } else if (store === 'familymart') {
-            if (cardType === 'product') {
-                targetFormat = "CODE_39";
-                desc = "全家商品卡 (對應 Code 39)";
-            } else {
-                targetFormat = "CODE_39";
-                desc = "全家咖啡卡 (Let's Café 預設 Code 39)";
-            }
+    function saveCard(card) {
+        const cards = loadCards();
+        cards.unshift(card);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+        renderCards();
+    }
+
+    function deleteCard(index) {
+        const cards = loadCards();
+        cards.splice(index, 1);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+        renderCards();
+    }
+
+    function renderCards() {
+        const cards = loadCards();
+        const listEl = document.getElementById('cardList');
+        if (cards.length === 0) {
+            listEl.innerHTML = '<div class="empty-hint">尚未收錄任何卡片</div>';
+            return;
         }
-
-        configDisplay.innerHTML = `目前鎖定格式：<b>${targetFormat}</b> (${desc})<br>✨ 策略：已自動排除 QR Code 以省時提升辨識率。`;
+        listEl.innerHTML = cards.map((c, i) => `
+            <div class="card-item">
+                <div>
+                    <div><strong>${c.code}</strong></div>
+                    <div class="meta">${c.store} · ${c.cardType} · ${c.format}</div>
+                </div>
+                <div class="del" onclick="deleteCard(${i})">刪除</div>
+            </div>
+        `).join('');
     }
 
-    function startScanning() {
-        if (isScanning) return;
-        
-        const store = document.getElementById('storeSelect').value;
-        
-        // 依照作者邏輯：7-11 預設 Code 128，全家預設 Code 39
-        const selectedFormats = (store === '711') ? 
-            [Html5QrcodeSupportedFormats.CODE_128] : 
-            [Html5QrcodeSupportedFormats.CODE_39];
+    function updateUIConfig() {
+        state.barcodeFormat = (state.store === '通路A') ? 'CODE128' : 'CODE39';
+        document.getElementById('statusBar').innerText =
+            `目前設定：${state.store} · ${state.cardType} · ${state.scanMode} · ${state.barcodeFormat}`;
+    }
 
-        html5QrCode = new Html5Qrcode("reader");
-        
-        const qrConfig = { 
-            fps: 10, 
-            qrbox: { width: 280, height: 120 },
-            formatsToSupport: selectedFormats
-        };
+    function setStore(val, el) { setActive(el); state.store = val; updateUIConfig(); }
+    function setCardType(val, el) { setActive(el); state.cardType = val; updateUIConfig(); }
+    function setScanMode(val, el) { setActive(el); state.scanMode = val; updateUIConfig(); }
+    function setActive(el) {
+        Array.from(el.parentNode.children).forEach(child => child.classList.remove('active'));
+        el.classList.add('active');
+    }
 
-        html5QrCode.start(
-            { facingMode: "environment" }, 
-            qrConfig, 
-            (decodedText, decodedResult) => {
-                document.getElementById('resultArea').innerHTML = `
-                    <strong>🎉 成功擷取！</strong><br>
-                    格式：${decodedResult.result.format.formatName}<br>
-                    內容：<code>${decodedText}</code>
-                `;
-            },
-            (errorMessage) => {
-                // 掃描中未對準的背景錯誤可忽略
+    async function toggleScanner() {
+        if (!isScanning) { await startScanner(); } else { stopScanner(); }
+    }
+
+    async function startScanner() {
+        const mainBtn = document.getElementById('mainBtn');
+        const videoContainer = document.getElementById('videoContainer');
+        const videoElement = document.getElementById('video');
+        const resultArea = document.getElementById('resultArea');
+
+        videoContainer.style.display = 'block';
+        mainBtn.innerText = '⏹ 停止掃描';
+        mainBtn.classList.add('stop');
+        isScanning = true;
+        resultArea.innerHTML = `<strong>掃描狀態：</strong> 辨識中 (${state.barcodeFormat})...`;
+
+        try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { exact: 'environment' } }
+            }).catch(() => {
+                return navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            });
+
+            videoElement.srcObject = mediaStream;
+            await videoElement.play();
+
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d', { willReadFrequently: true });
+
+            if (typeof zbarWasm === 'undefined') {
+                throw new Error("條碼辨識核心未載入");
             }
-        ).then(() => {
-            isScanning = true;
-            document.getElementById('startBtn').style.display = 'none';
-            document.getElementById('stopBtn').style.display = 'block';
-        }).catch(err => {
-            alert(`無法啟動相機鏡頭: ${err}`);
-        });
+
+            scanInterval = setInterval(async () => {
+                if (isProcessing) return;
+                if (videoElement.readyState === videoElement.HAVE_ENOUGH_DATA) {
+                    isProcessing = true;
+
+                    const targetWidth = 640;
+                    const scale = targetWidth / videoElement.videoWidth;
+                    canvas.width = targetWidth;
+                    canvas.height = videoElement.videoHeight * scale;
+
+                    const srcW = videoElement.videoWidth;
+                    const srcH = videoElement.videoHeight;
+                    const roiW = srcW * 0.8;
+                    const roiH = 140;
+                    const roiX = (srcW - roiW) / 2;
+                    const roiY = (srcH - roiH) / 2;
+
+                    context.drawImage(
+                        videoElement,
+                        roiX, roiY, roiW, roiH,
+                        0, 0, canvas.width, canvas.height
+                    );
+
+                    try {
+                        const symbols = await zbarWasm(canvas);
+                        if (symbols && symbols.length > 0) {
+                            for (let symbol of symbols) {
+                                if (symbol.typeName.includes('QR')) continue;
+
+                                const code = symbol.decode();
+                                resultArea.innerHTML = `
+                                    <div style="color: #4ade80; font-weight: bold;">✓ 已讀取</div>
+                                    <div>通路：${state.store}</div>
+                                    <div>條碼類型：${symbol.typeName}</div>
+                                    <div>內容：<code>${code}</code></div>
+                                `;
+                                saveCard({
+                                    code: code,
+                                    store: state.store,
+                                    cardType: state.cardType,
+                                    format: symbol.typeName,
+                                    savedAt: new Date().toISOString()
+                                });
+                                if (navigator.vibrate) navigator.vibrate(100);
+                                stopScanner();
+                                break;
+                            }
+                        }
+                    } catch (e) {
+                        // 忽略未命中例外
+                    }
+                    isProcessing = false;
+                }
+            }, 120);
+
+        } catch (err) {
+            alert("相機啟動失敗：" + err);
+            stopScanner();
+        }
     }
 
-    function stopScanning() {
-        if (!isScanning || !html5QrCode) return;
-        html5QrCode.stop().then(() => {
-            isScanning = false;
-            document.getElementById('startBtn').style.display = 'block';
-            document.getElementById('stopBtn').style.display = 'none';
-        }).catch(err => {
-            console.error("停止失敗", err);
-        });
+    function stopScanner() {
+        if (scanInterval) { clearInterval(scanInterval); scanInterval = null; }
+        if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
+        document.getElementById('video').srcObject = null;
+        document.getElementById('videoContainer').style.display = 'none';
+        const mainBtn = document.getElementById('mainBtn');
+        mainBtn.innerText = '▶ 啟動掃描';
+        mainBtn.classList.remove('stop');
+        isScanning = false;
+        isProcessing = false;
     }
 
-    // 初始化載入規格提示
-    updateBarcodeConfig();
+    updateUIConfig();
+    renderCards();
 </script>
 
 </body>
